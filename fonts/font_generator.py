@@ -1,6 +1,42 @@
 #!/usr/bin/env python3
 
-class Font6x4:
+from abc import ABC, abstractmethod
+
+class FontBase(ABC):
+    """
+    Abstract base class for fonts.
+    """
+    @property
+    @abstractmethod
+    def height(self):
+        """
+        Returns the pixel height of the font.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def width(self):
+        """
+        Returns the pixel width of the font.
+        """
+        pass
+
+    @abstractmethod
+    def get_columns(self):
+        """
+        Returns the columns of the font.
+        """
+        pass
+
+    @abstractmethod
+    def __repr__(self):
+        """
+        Returns a string representation of the font.
+        """
+        pass
+
+class Font6x4(FontBase):
     """
     # [Tiny Monospaced Font](https://robey.lag.net/2010/01/23/tiny-monospace-font.html)
     ## Tom Thumb: A very tiny, monospace, bitmap font
@@ -13,7 +49,10 @@ class Font6x4:
         self.bbx = bbx
         self.bitmap = bitmap
     @property
-    def advance(self):
+    def height(self):
+        return self.bbx[1] - self.bbx[3] + 1
+    @property
+    def width(self):
         return self.dwidth[0]
     def get_columns(self):
         columns = list([0] * 4)
@@ -30,7 +69,7 @@ class Font6x4:
         return f'{__class__.__name__}({self.swidth}, {self.dwidth}, {self.bbx}, {bitmap})'
 
 
-class Font8x9:
+class Font8x9(FontBase):
     """
     # [Pixelated Elegance Font](https://www.fontspace.com/pixelated-elegance-font-f126145)
     ## The font Pixelated Elegance - CC0 contains 206 glyphs.
@@ -41,12 +80,18 @@ class Font8x9:
         self.auto_update_advance = auto_update_advance
         self.auto_advance_amount = auto_advance_amount
         self.pixels = pixels
+    @property
+    def height(self):
+        return 8
+    @property
+    def width(self):
+        return self.advance
     def get_columns(self):
         pixels = self.pixels
         pixels = sorted(pixels)
-        if pixels and self.advance <= pixels[-1][0]:
-            print(f'Character has advance {self.advance} <= max {pixels[-1][0]}. Will throw...')
-        columns = list([0] * self.advance)
+        if pixels and self.width <= pixels[-1][0]:
+            print(f'Character has width {self.width} <= max {pixels[-1][0]}. Will throw...')
+        columns = list([0] * self.width)
         for pixel in pixels:
             columns[pixel[0]] |= (1 << (6 - pixel[1]))
         return columns
@@ -54,7 +99,7 @@ class Font8x9:
         return f'{__class__.__name__}({self.advance}, {self.auto_update_advance}, {self.auto_advance_amount}, {self.pixels})'
 
 
-class Font16x8:
+class Font16x8(FontBase):
     """
     # [Bizcat 16 × 8 font](https://github.com/tomwaitsfornoman/lawrie-nes_ecp5/blob/master/osd/font_bizcat8x16.mem)
     """

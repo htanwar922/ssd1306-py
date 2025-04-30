@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Dict, Tuple, Union
 
 class ByteArray(bytearray):
     def __init__(self, *args, **kwargs):
@@ -187,3 +187,129 @@ class Layout:
         ret += '<<< layout end\n'
         return ret
 
+if __name__ == '__main__':
+    import time
+    import string
+
+    from fonts import FontBase, font6x4, font8x9, print_columns
+    from lcd_display import PAGES, COLUMNS, MODE_PAGE, MODE_HORIZONTAL, MODE_VERTICAL
+    from lcd_update import set_mode, set_page, set_column, write, send_update
+
+    N_PAGES = PAGES
+    N_COLUMNS = COLUMNS
+
+    layout = Layout(N_PAGES, N_COLUMNS)
+    layout.add_tile(0, 0, N_PAGES - 1, N_COLUMNS - 1)
+    tile1 = layout.tiles[0]
+    print(layout)
+
+    ret = tile1.clear(send_update)
+    print(f'Clear: {ret}')
+
+    # mode = MODE_VERTICAL
+    mode = MODE_HORIZONTAL
+    # mode = MODE_PAGE
+
+    if mode == MODE_HORIZONTAL:
+        set_mode(MODE_HORIZONTAL)
+
+        set_page(0x0)
+        set_column(0x00)
+        for page in range(N_PAGES):
+            for column in range(N_COLUMNS):
+                tile1[page, column] = 0xaa
+                layout.flush(lambda row, col, data: write(data))
+                # time.sleep(0.001)
+        for page in range(N_PAGES):
+            for column in range(N_COLUMNS):
+                tile1[page, column] = 0x00
+                layout.flush(lambda row, col, data: write(data))
+                # time.sleep(0.001)
+
+    elif mode == MODE_PAGE:
+        set_mode(MODE_PAGE)
+
+        set_page(0x0)
+        set_column(0x00)
+        for page in range(N_PAGES):
+            set_page(page)
+            for column in range(N_COLUMNS):
+                tile1[page, column] = 0xaa
+                layout.flush(lambda row, col, data: write(data))
+                # time.sleep(0.001)
+        for page in range(N_PAGES):
+            set_page(page)
+            for column in range(N_COLUMNS):
+                tile1[page, column] = 0x00
+                layout.flush(lambda row, col, data: write(data))
+                # time.sleep(0.001)
+
+    elif mode == MODE_VERTICAL:
+        raise NotImplementedError('Vertical addressing mode is not implemented yet.')
+
+    else:
+        raise ValueError(f'Invalid mode: {mode}. Expected one of {MODE_PAGE}, {MODE_HORIZONTAL}, {MODE_VERTICAL}')
+
+
+    page = 0
+    column = 0
+    set_page(page)
+    set_column(column)
+    for font in [font6x4, font8x9]:
+        font : Dict[str, FontBase]
+        for c in string.printable:
+            if c in ('\n', '\r', '\x0b', '\x0c'):
+                continue
+            if c not in font:
+                print(f"Character '{c}' not found in {font.values()[0].__class__}.")
+                continue
+            columns = font[c].get_columns()
+
+            if mode == MODE_PAGE:
+                width = font[c].width
+                if column + width >= N_COLUMNS:
+                    # Will overflow, move to next page
+                    print(f'Column: {column}, Width: {width}')
+                    for col in range(column, N_COLUMNS):
+                        tile1[page, col] = 0x00
+                    layout.flush(lambda row, col, data: write(data))
+
+                    page = (page + 1) % N_PAGES
+                    column = 0
+                    set_page(page)
+                    set_column(column)
+
+
+            for byte in columns:
+                tile1[page, column] = byte
+                column += 1
+                column %= N_COLUMNS
+                if column == 0:
+                    page = (page + 1) % N_PAGES
+            layout.flush(lambda row, col, data: write(data))
+
+            if font == font6x4:
+                rows = 5
+            elif font == font8x9:
+                rows = 8
+            else:
+                raise ValueError(f'Unknown font: {font}.')
+            # print_columns(columns, rows)
+            time.sleep(0.001)
+
+    print(f'Page: {page}, Column: {column}')
+
+    for col in range(column, N_COLUMNS):
+        tile1[page, col] = 0x00
+    layout.flush(lambda row, col, data: write(data))
+    print(layout)
+
+    time.sleep(1)
+
+    # Not in coherence with the actual LCD behaviour - won't specify page and column every time
+    for page in range(N_PAGES):
+        set_page(page)
+        set_column(0x00)
+        for _ in range(N_COLUMNS):
+            write(b'\x00')
+    layout.flush(send_update, force=True)

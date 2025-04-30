@@ -1,4 +1,4 @@
-from .font_generator import Font8x9, Font6x4
+from .font_generator import FontBase, Font8x9, Font6x4
 
 def print_columns(columns, rows):
     for row in range(rows):
