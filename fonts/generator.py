@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Union
 
 class FontBase(ABC):
     """
@@ -23,8 +23,24 @@ class FontBase(ABC):
         """
         pass
 
+    @classmethod
     @abstractmethod
-    def get_columns(self) -> List[int]:
+    def max_height(cls) -> int:
+        """
+        Returns the pixel width of the font.
+        """
+        pass
+
+    @classmethod
+    @abstractmethod
+    def max_width(cls) -> int:
+        """
+        Returns the pixel width of the font.
+        """
+        pass
+
+    @abstractmethod
+    def get_columns(self) -> Union[List[int], List[List[int]]]:
         """
         Returns the columns of the font.
         """
@@ -55,12 +71,18 @@ class Font6x4(FontBase):
     @property
     def width(self):
         return self.dwidth[0]
-    def get_columns(self):
+    @classmethod
+    def max_height(cls) -> int:
+        return 6
+    @classmethod
+    def max_width(cls) -> int:
+        return 4
+    def get_columns(self) -> List[int]:
         columns = list([0] * 4)
         for row in range(len(self.bitmap)):
             byte = self.bitmap[row] >> 4
             for col in range(4):
-                columns[col] |= ((byte & (1 << (3 - col))) >> (3 - col)) << (row + (6 - len(self.bitmap)))
+                columns[col] |= (byte >> (3 - col) & 1) << (row + (6 - len(self.bitmap)))
         if any(columns):
             while len(columns) >= 2 and columns[-1] == 0 and columns[-2] == 0:
                 columns.pop()
@@ -87,7 +109,13 @@ class Font8x9(FontBase):
     @property
     def width(self):
         return self.advance
-    def get_columns(self):
+    @classmethod
+    def max_height(cls) -> int:
+        return 8
+    @classmethod
+    def max_width(cls) -> int:
+        return 9
+    def get_columns(self) -> List[int]:
         pixels = self.pixels
         pixels = sorted(pixels)
         if pixels and self.width <= pixels[-1][0]:
@@ -105,19 +133,31 @@ class Font16x8(FontBase):
     # [Bizcat 16 × 8 font](https://github.com/tomwaitsfornoman/lawrie-nes_ecp5/blob/master/osd/font_bizcat8x16.mem)
     """
     def __init__(self, bitmap):
-        self.bitmap = bitmap
+        self.bitmap = bitmap        # Row-major order - 16 rows, 8 columns - first byte is top row
     @property
     def height(self):
         return 16
     @property
     def width(self):
         return 8
-    def get_columns(self):
-        columns = list([0] * 8)
-        for row in range(len(self.bitmap)):
+    @classmethod
+    def max_height(cls) -> int:
+        return 16
+    @classmethod
+    def max_width(cls) -> int:
+        return 8
+    def get_columns(self) -> List[List[int]]:
+        # columns = [[0] * 8 for _ in range(16 // 8)]
+        # for row in range(16):
+        #     byte = self.bitmap[row]
+        #     for col in range(8):
+        #         columns[row // 8][col] |= (byte >> (7 - col) & 1) << row % 8
+        # return columns
+        columns = [[0] * 2 for _ in range(8)]
+        for row in range(16):
             byte = self.bitmap[row]
             for col in range(8):
-                columns[col] |= ((byte & (1 << (7 - col))) >> (7 - col)) << (len(self.bitmap) - row - 1)
+                columns[col][row // 8] |= (byte >> (7 - col) & 1) << row % 8
         return columns
     def __repr__(self):
         bitmap = '[' + ', '.join(f'0x{b:02x}' for b in self.bitmap) + ']'
@@ -125,6 +165,7 @@ class Font16x8(FontBase):
 
 
 if __name__ == '__main__':
+    import string
 
     font6x4 = {}
     with open('tom-thumb.bdf', 'r') as f:
@@ -152,6 +193,8 @@ if __name__ == '__main__':
 
     with open('font_6x4.txt', 'w', encoding='utf-8') as f:
         for k, v in font6x4.items():
+            if k not in string.printable:
+                continue
             f.write("'" + (k if k not in ("'", "\\") else f'\\{k}') + f"': {v},\n")
         print(f'Generated font_6x4.txt for {len(font6x4)} characters')
 
@@ -191,6 +234,8 @@ if __name__ == '__main__':
 
     with open('font_8x9.txt', 'w', encoding='utf-8') as f:
         for k, v in font8x9.items():
+            if k not in string.printable:
+                continue
             f.write("'" + (k if k not in ("'", "\\") else f'\\{k}') + f"': {v},\n")
         print(f'Generated font_8x9.txt for {len(font8x9)} characters')
 
@@ -205,7 +250,7 @@ if __name__ == '__main__':
                 for _ in range(16):
                     line = f.readline()
                     bitmap.append(int(line.strip(), 2))
-                if char in (' ', '\n', '\r', '\t'):
+                if char in (' ', '\n', '\r', '\t', '\x0b', '\x0c', '\x00'):
                     continue
                 font16x8[char] = Font16x8(bitmap)
             else:
@@ -213,6 +258,8 @@ if __name__ == '__main__':
 
     with open('font_16x8.txt', 'w', encoding='utf-8') as f:
         for k, v in font16x8.items():
+            if k not in string.printable:
+                continue
             f.write("'" + (k if k not in ("'", "\\") else f'\\{k}') + f"': {v},\n")
         print(f'Generated font_16x8.txt for {len(font16x8)} characters')
 

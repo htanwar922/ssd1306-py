@@ -1,15 +1,23 @@
 from collections.abc import Iterable
 from typing import Callable, List, Dict, Tuple, Union
 
+from fonts import FontBase
+
 class ByteArray(bytearray):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def __repr__(self):
-        return '{' + ' '.join(f'{byte:02x}' for byte in self) + '}'
+        # return '{' + ' '.join(f'{byte:02x}' for byte in self) + '}'
+        return ' '.join(f'{byte:02x}' for byte in self)
+
+    def __str__(self):
+        return repr(self)
 
 class Tile:
     def __init__(self, startpage, startcolumn, endpage, endcolumn):
+        assert startpage <= endpage, f'Start page {startpage} must be less than or equal to end page {endpage}'
+        assert startcolumn <= endcolumn, f'Start column {startcolumn} must be less than or equal to end column {endcolumn}'
         self.startpage = startpage
         self.startcolumn = startcolumn
         self.endpage = endpage
@@ -85,7 +93,7 @@ class Tile:
     def dirty(self):
         return self._dirty
 
-    def clear(self, callback: Callable[[int, int, List[int]], None]):
+    def clear(self, callback: Callable[[int, int, List[int]], bool]):
         self._dirty.clear()
 
         for i in range(self.height):
@@ -93,7 +101,7 @@ class Tile:
 
         return self.flush(callback)
 
-    def flush(self, callback: Callable[[int, int, List[int]], None], force: bool = False) -> bool:
+    def flush(self, callback: Callable[[int, int, List[int]], bool], force: bool = False) -> bool:
         if not callable(callback):
             raise TypeError('Callback must be callable')
 
@@ -132,6 +140,7 @@ class Tile:
             prefix = ' ' * 4
             ret += prefix + ' ' * 4 + ' '.join(f'{col:02x}' for col in range(startcolumn, endcolumn)) + '\n'
             for page in range(self.startpage, self.endpage + 1):
+                page = page - self.startpage
                 ret += prefix + f'{page:02x}: ' + ' '.join(f'{self._data[page][col]:02x}' for col in range(startcolumn, endcolumn)) + '\n'
             startcolumn += steps
         ret += '<<< tile end\n'
@@ -160,32 +169,91 @@ class Layout:
         if startpage > endpage or (startpage == endpage and startcolumn > endcolumn):
             raise ValueError(f'Invalid tile: [{startpage}, {startcolumn}] --> [{endpage}, {endcolumn}]')
 
-        seg = Tile(startpage, startcolumn, endpage, endcolumn)
+        tile_ = Tile(startpage, startcolumn, endpage, endcolumn)
         for tile in self.tiles:
-            if seg.overlaps(tile):
-                raise ValueError(f'Tile overlaps with existing tile: {tile}')
-        self.tiles.append(seg)
+            if tile_.overlaps(tile):
+                raise ValueError(f'{str(tile_).split(chr(0x0a))[0]} overlaps with existing tile: {str(tile).split(chr(0x0a))[0]}')
+        self.tiles.append(tile_)
 
-    def clear(self, callback: Callable[[int, int, List[int]], None]):
-        for tile in self.tiles:
-            tile.clear(callback)
+    def clear(self, callback: Callable[[int, int, List[int]], bool]):
+        return all(tile.clear(callback) for tile in self.tiles)
 
-    def flush(self, callback: Callable[[int, int, List[int]], None], force: bool = False) -> bool:
-        for tile in self.tiles:
-            if not tile.flush(callback, force):
-                return False
-        return True
+    def flush(self, callback: Callable[[int, int, List[int]], bool], force: bool = False) -> bool:
+        return all(tile.flush(callback, force) for tile in self.tiles)
 
     def __repr__(self):
         ret = f'Layout({self.pages}x{self.columns} - {len(self.tiles)} tiles)\n'
         ret += '>>> layout start\n'
         for tile in self.tiles:
-            seg = str(tile)
+            tile_ = str(tile)
             prefix = ' ' * 4
-            seg = seg.replace('\n', '\n' + prefix)
-            ret += prefix + seg + '\n'
+            tile_ = tile_.replace('\n', '\n' + prefix)
+            ret += prefix + tile_ + '\n'
         ret += '<<< layout end\n'
         return ret
+
+class Printer:
+    def __init__(self, layout: Layout, truncate: bool = True):
+        if not isinstance(layout, Layout):
+            raise TypeError(f'Expected Layout, got {type(layout)}')
+
+        self.layout = layout
+        self.truncate = truncate
+
+    def __call__(self
+            , tile_index: int
+            , text: Union[str, List[int], List[List[int]]]
+            , font: Union[None, Dict[str, FontBase]]
+            , callback: Callable[[int, int, List[int]], bool]
+        ):
+        if tile_index < 0 or tile_index >= len(self.layout.tiles):
+            raise ValueError(f'Tile index {tile_index} out of range (0-{len(self.layout.tiles)-1})')
+        tile = self.layout.tiles[tile_index]
+        if not isinstance(tile, Tile):
+            raise TypeError(f'Tile index {tile_index} is not a Tile object')
+        if font is not None and not isinstance(text, str):
+            raise TypeError(f'Text must be a string, got {type(text)}')
+        if not text:
+            raise ValueError('Text cannot be empty')
+        if not callable(callback):
+            raise TypeError('Callback must be callable')
+
+        if not tile.clear(callback):
+            raise RuntimeError('Failed to clear tile')
+
+        current_column = 0
+        for c in text:
+            if font is None:
+                columns = text
+            elif c not in font:
+                raise ValueError(f'Character {c} not found in font')
+            else:
+                columns = font[c].get_columns()
+
+            if not self.truncate and current_column + len(columns) > tile.width:
+                raise ValueError(f'Column overflow: {tile.startcolumn} + {current_column} + {len(columns)} > {tile.endcolumn}')
+            if not isinstance(columns[0], Iterable):
+                columns = [[column] for column in columns]
+
+            if len(columns[0]) > tile.height:
+                raise ValueError(f'Page overflow: {tile.startpage} + {len(columns)} > {tile.endpage}')
+
+            for column in columns:
+                for page, byte in enumerate(column):
+                    if not self.truncate and current_column > tile.width:
+                        raise ValueError(f'Column overflow: {tile.startcolumn} + {current_column} + {page} > {tile.endcolumn}')
+                    try:
+                        tile[page, current_column] = byte
+                    except ValueError:
+                        if self.truncate:
+                            print(f'WARNING: Column overflow truncated: {tile.startcolumn} + {current_column} + {page} > {tile.endcolumn}')
+                            break
+                        else:
+                            raise
+                if not tile.flush(callback):
+                    raise RuntimeError('Failed to flush tile')
+                current_column += 1
+        return True
 
 if __name__ == '__main__':
     import time

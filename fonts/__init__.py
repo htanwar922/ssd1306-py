@@ -1,3 +1,5 @@
+from collections.abc import Iterable
+
 from .generator import FontBase, Font8x9, Font6x4, Font16x8
 
 font6x4 = None
@@ -22,20 +24,26 @@ font16x8 = None
 # [Bizcat 16 × 8 font](https://github.com/tomwaitsfornoman/lawrie-nes_ecp5/blob/master/osd/font_bizcat8x16.mem)
 """
 
-def print_columns(columns, rows):
-    for row in range(rows):
-        for byte in columns:
-            if byte & (1 << (rows - 1 - row)):
-                print('█', end='')
-            else:
-                print(' ', end='')
-        print()
+def print_columns(columns_, rows):
+    if not isinstance(columns_[0], Iterable):
+        columns_ = [columns_]
+
+    rows = min(rows, 8)
+
+    for columns in columns_:
+        for row in range(rows):
+            for byte in columns:
+                if byte & (1 << row):
+                    print('█', end='')
+                else:
+                    print(' ', end='')
+            print()
     print()
 
 
 font6x4 = {
     # Manually added fonts
-    '\t': Font6x4((1000, 0), (4, 0), (1, 5, 1, 0), [0, 0, 0, 0]),
+    '\t': Font6x4((1000, 0), (4, 0), None, [0, 0, 0, 0]),
 
     # Font data: 96 printable ASCII characters (0x20–0x7E)
     ' ': Font6x4((1000, 0), (4, 0), (1, 1, 3, 4), [0x00]),
@@ -455,7 +463,9 @@ font8x9 = {
 }
 
 font16x8 = {
-    ' ': Font16x8([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    # Manually added fonts
+    ' ': Font16x8([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+
     '': Font16x8([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     '': Font16x8([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     '': Font16x8([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
