@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from abc import ABC, abstractmethod
+from typing import List
 
 class FontBase(ABC):
     """
@@ -8,7 +9,7 @@ class FontBase(ABC):
     """
     @property
     @abstractmethod
-    def height(self):
+    def height(self) -> int:
         """
         Returns the pixel height of the font.
         """
@@ -16,21 +17,21 @@ class FontBase(ABC):
 
     @property
     @abstractmethod
-    def width(self):
+    def width(self) -> int:
         """
         Returns the pixel width of the font.
         """
         pass
 
     @abstractmethod
-    def get_columns(self):
+    def get_columns(self) -> List[int]:
         """
         Returns the columns of the font.
         """
         pass
 
     @abstractmethod
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Returns a string representation of the font.
         """
@@ -105,6 +106,12 @@ class Font16x8(FontBase):
     """
     def __init__(self, bitmap):
         self.bitmap = bitmap
+    @property
+    def height(self):
+        return 16
+    @property
+    def width(self):
+        return 8
     def get_columns(self):
         columns = list([0] * 8)
         for row in range(len(self.bitmap)):
@@ -112,6 +119,9 @@ class Font16x8(FontBase):
             for col in range(8):
                 columns[col] |= ((byte & (1 << (7 - col))) >> (7 - col)) << (len(self.bitmap) - row - 1)
         return columns
+    def __repr__(self):
+        bitmap = '[' + ', '.join(f'0x{b:02x}' for b in self.bitmap) + ']'
+        return f'{__class__.__name__}({bitmap})'
 
 
 if __name__ == '__main__':
@@ -183,3 +193,28 @@ if __name__ == '__main__':
         for k, v in font8x9.items():
             f.write("'" + (k if k not in ("'", "\\") else f'\\{k}') + f"': {v},\n")
         print(f'Generated font_8x9.txt for {len(font8x9)} characters')
+
+
+    font16x8 = {}
+    with open('font_bizcat8x16.mem', 'r') as f:
+        f.readline()  # Skip first line
+        for line in f:
+            if line.startswith('// 0x'):
+                char = chr(int(line.split()[1], 16))
+                bitmap = []
+                for _ in range(16):
+                    line = f.readline()
+                    bitmap.append(int(line.strip(), 2))
+                if char in (' ', '\n', '\r', '\t'):
+                    continue
+                font16x8[char] = Font16x8(bitmap)
+            else:
+                print(f'Unexpected line: {line.strip()}')
+
+    with open('font_16x8.txt', 'w', encoding='utf-8') as f:
+        for k, v in font16x8.items():
+            f.write("'" + (k if k not in ("'", "\\") else f'\\{k}') + f"': {v},\n")
+        print(f'Generated font_16x8.txt for {len(font16x8)} characters')
+
+
+    print('Done.')
