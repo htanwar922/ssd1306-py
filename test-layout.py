@@ -2,7 +2,7 @@ import time
 
 from layout import Layout, Printer
 from fonts import FontBase, font8x9, font6x4, font16x8, print_columns
-from lcd_display import PAGES, COLUMNS, MODE_PAGE, MODE_HORIZONTAL, MODE_VERTICAL
+from lcd_display import PAGES, COLUMNS
 from lcd_update import set_mode, set_page, set_column, write
 
 N_PAGES, N_COLUMNS = PAGES, COLUMNS
@@ -47,7 +47,7 @@ def send_update(tile, bytes_ : bytes) -> bool:
     # import time; time.sleep(0.001)
     return set_page(tile.startpage, tile.endpage) \
         and set_column(tile.startcolumn, tile.endcolumn) \
-        and write(bytes_)
+        and write(bytes(bytes_))
 
 ret = layout1.clear(send_update)
 print(f'Clear: {ret}')
