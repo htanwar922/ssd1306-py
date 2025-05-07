@@ -27,9 +27,8 @@ setup = [
     *SSD1306_SET_DISPLAY_OFFSET.get_command(0x00),                          # no offset
     *SSD1306_SET_START_LINE.get_command(0x00),                              # line #0
     *SSD1306_CHARGE_PUMP.get_command(0x1),                                  # Enable
-    *SSD1306_SET_MEMORY_ADDRESSING_MODE.get_command(ADDRESSING_MODE),
-    *SSD1306_SEGMENT_REMAP.get_command(OPTION_SEGMENT_REMAP_SEG0_TO_0),   # 0 - RTL, 1 - LTR
-    *SSD1306_COM_OUTPUT_SCAN_DIR.get_command(OPTION_COM_SCAN_DIR_NORMAL),  # 0xC8 - top to bottom, 0xC0 - bottom to top
+    *SSD1306_SEGMENT_REMAP.get_command(OPTION_SEGMENT_REMAP_SEG0_TO_0),     # 0 - LTR, 1 - RTL
+    *SSD1306_COM_OUTPUT_SCAN_DIR.get_command(OPTION_COM_SCAN_DIR_NORMAL),   # 0xC8 - top to bottom, 0xC0 - bottom to top
     *SSD1306_SET_COM_PINS.get_command(0),
     *SSD1306_SETCONTRAST.get_command(0x8F),
     *SSD1306_SET_PRECHARGE_PERIOD.get_command(0xF1),
@@ -40,11 +39,13 @@ setup = [
 ]
 
 setup_ha_va = [
+    *SSD1306_SET_MEMORY_ADDRESSING_MODE.get_command(ADDRESSING_MODE),
     *SSD1306_HAVA_MODE_SET_PAGE_ADDR.get_command(0x00, 0x03),
     *SSD1306_HAVA_MODE_SET_COLUMN_ADDR.get_command(0x00, 0x7F),
 ]
 
 setup_pa = [
+    *SSD1306_SET_MEMORY_ADDRESSING_MODE.get_command(ADDRESSING_MODE),
     *SSD1306_PA_MODE_SET_PAGE_ADDR.get_command(0x0),
     *SSD1306_PA_MODE_SET_COLUMN_ADDR_LOW.get_command(0x0),
     *SSD1306_PA_MODE_SET_COLUMN_ADDR_HIGH.get_command(0x0),

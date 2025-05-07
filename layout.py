@@ -23,7 +23,7 @@ class Tile:
         self.endpage = endpage
         self.endcolumn = endcolumn
         self._data : List[ByteArray] = [ByteArray([0] * self.width) for _ in range(self.height)]
-        self._dirty : List[Tuple[int, int, Union[bytes, bytearray]]] = []
+        self._dirty = False
 
     @property
     def width(self) -> int:
@@ -87,21 +87,20 @@ class Tile:
         else:
             value = bytes([value])
 
-        self._dirty.append((*item, ByteArray(value)))
+        self._data[i][j:j+len(value)] = value
+        self._dirty = True
 
     @property
     def dirty(self):
         return self._dirty
 
-    def clear(self, callback: Callable[[int, int, List[int]], bool]):
-        self._dirty.clear()
-
-        for i in range(self.height):
-            self._dirty.append((i, 0, ByteArray([0] * self.width)))
+    def clear(self, callback: Callable[['Tile', List[int]], bool]):
+        self._data = [ByteArray([0] * self.width) for _ in range(self.height)]
+        self._dirty = True
 
         return self.flush(callback)
 
-    def flush(self, callback: Callable[[int, int, List[int]], bool], force: bool = False) -> bool:
+    def flush(self, callback: Callable[['Tile', List[int]], bool], force: bool = False) -> bool:
         if not callable(callback):
             raise TypeError('Callback must be callable')
 
@@ -110,15 +109,10 @@ class Tile:
                 print('Nothing to flush')
                 return True
 
-            self._dirty = [(i, 0, self._data[i]) for i in range(self.height)]
+        if not callback(self, [self._data[i][j] for i in range(self.height) for j in range(self.width)]):
+            return False
 
-        while self._dirty:
-            i, j, value = self._dirty.pop(0)
-
-            if not callback(self.startpage + i, self.startcolumn + j, value):
-                return False
-
-            self._data[i][j:j+len(value)] = value
+        self._dirty = False
 
         return True
 
@@ -175,10 +169,10 @@ class Layout:
                 raise ValueError(f'{str(tile_).split(chr(0x0a))[0]} overlaps with existing tile: {str(tile).split(chr(0x0a))[0]}')
         self.tiles.append(tile_)
 
-    def clear(self, callback: Callable[[int, int, List[int]], bool]):
+    def clear(self, callback: Callable[[Tile, List[int]], bool]):
         return all(tile.clear(callback) for tile in self.tiles)
 
-    def flush(self, callback: Callable[[int, int, List[int]], bool], force: bool = False) -> bool:
+    def flush(self, callback: Callable[[Tile, List[int]], bool], force: bool = False) -> bool:
         return all(tile.flush(callback, force) for tile in self.tiles)
 
     def __repr__(self):
@@ -204,7 +198,7 @@ class Printer:
             , tile_index: int
             , text: Union[str, List[int], List[List[int]]]
             , font: Union[None, Dict[str, FontBase]]
-            , callback: Callable[[int, int, List[int]], bool]
+            , callback: Callable[[Tile, List[int]], bool]
         ):
         if tile_index < 0 or tile_index >= len(self.layout.tiles):
             raise ValueError(f'Tile index {tile_index} out of range (0-{len(self.layout.tiles)-1})')
@@ -217,9 +211,6 @@ class Printer:
             raise ValueError('Text cannot be empty')
         if not callable(callback):
             raise TypeError('Callback must be callable')
-
-        if not tile.clear(callback):
-            raise RuntimeError('Failed to clear tile')
 
         current_column = 0
         for c in text:
@@ -250,9 +241,9 @@ class Printer:
                             break
                         else:
                             raise
-                if not tile.flush(callback):
-                    raise RuntimeError('Failed to flush tile')
                 current_column += 1
+        if not tile.flush(callback):
+            raise RuntimeError('Failed to flush tile')
         return True
 
 if __name__ == '__main__':

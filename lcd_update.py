@@ -34,7 +34,3 @@ def write(bytes_ : bytes):
         raise ValueError('Bytes object is empty')
     message = 'write ' + ' '.join(f'{byte:02x}' for byte in bytes_)
     return send_message(message)
-
-def send_update(page, column, bytes_ : bytes) -> bool:
-    # import time; time.sleep(0.001)
-    return set_page(page) and set_column(column) and write(bytes_)
